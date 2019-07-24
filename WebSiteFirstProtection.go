@@ -79,15 +79,18 @@ var DBSignaturesPHP Database
 var DBSignaturesJS  Database
 const APIKEY = ""
 var watcher *fsnotify.Watcher
+var logoutput bool
+const layout = "2006-01-02T15:04:05"
 
 func ScanFileResult(scanrequest ScanRequest) ScanResult {
   var scanresult ScanResult
+  scanresult.Response = -10
   hc := http.Client{}
   form := url.Values{}
   form.Add("apikey", APIKEY)
   form.Add("resource", scanrequest.Resource)
 
-  req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/scan", strings.NewReader(form.Encode()))
+  req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/report", strings.NewReader(form.Encode()))
   req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
   res, err := hc.Do(req)
 	if err != nil {
@@ -108,7 +111,7 @@ func ScanFileResult(scanrequest ScanRequest) ScanResult {
 
 func ScanFileRequest(path string) ScanRequest {
   var scanrequest ScanRequest
-
+  scanrequest.Response=-10
 	var b bytes.Buffer
 	w := multipart.NewWriter(&b)
 
@@ -119,29 +122,23 @@ func ScanFileRequest(path string) ScanRequest {
 	defer f.Close()
 	fw, err := w.CreateFormFile("file", path)
 	if err != nil {
-    scanrequest.Response=-10
 		return scanrequest
 	}
 	if _, err = io.Copy(fw, f); err != nil {
-    scanrequest.Response=-10
 		return scanrequest
 	}
 
-
 	if fw, err = w.CreateFormField("apikey"); err != nil {
-    scanrequest.Response=-10
 		return scanrequest
 	}
 	if _, err = fw.Write([]byte(APIKEY)); err != nil {
-    scanrequest.Response=-10
 		return scanrequest
 	}
 
 	w.Close()
 
-	req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/report", &b)
+	req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/scan", &b)
 	if err != nil {
-    scanrequest.Response=-10
 		return scanrequest
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
@@ -149,27 +146,74 @@ func ScanFileRequest(path string) ScanRequest {
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-    scanrequest.Response = -10
 		return scanrequest
 	}
 
 	// Check the response
 	if res.StatusCode != http.StatusOK {
-		err = fmt.Errorf("bad status: %s", res.Status)
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Bad Status Code|",res.Status)
+    } else {
+        err = fmt.Errorf("bad status: %s", res.Status)
+    }
 	} else {
     decoder := json.NewDecoder(res.Body)
     err = decoder.Decode(&scanrequest)
   }
+
   return scanrequest
 }
 
+func ScanFileOnVt(path string) {
+  if ! logoutput {
+     fmt.Printf("\tVirus total check\n")
+  }
+
+
+  scanfilerequest := ScanFileRequest(path)
+  if scanfilerequest.Response == -10 {
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Error|Can't request to virustotal")
+    } else {
+      color.Red("\tError on request\n")
+    }
+
+    return
+  }
+  var scanfileresult ScanResult
+  scanfileresult.Response = -2
+
+  for scanfileresult.Response == -2 {
+    time.Sleep(25 * time.Second)
+    scanfileresult = ScanFileResult(scanfilerequest)
+  }
+  if scanfileresult.Positives > 0 {
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Warning|File infected|VirusTotal|",path,"|",scanfileresult.Permalink)
+    } else {
+      color.Red("\t\tWarning: File infected\n")
+      color.Red("\t\tMore info %s\n",scanfileresult.Permalink)
+    }
+
+  } else {
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Ok|VirusTotal|",scanfileresult.Permalink)
+    } else {
+      color.Green("\t\tOK\n")
+    }
+  }
+}
 
  func CheckSignaturesOnFile(path string, database Database, vt bool) {
 //   var database Database
   if database.DBName != "" && len(database.List) > 0 {
     f, err := os.Open(path)
     if err != nil {
-      fmt.Println(err)
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Error|Open File|",path)
+      } else {
+        fmt.Println(err)
+      }
     }
     defer f.Close()
     scanner := bufio.NewScanner(f)
@@ -182,9 +226,14 @@ func ScanFileRequest(path string) ScanRequest {
          //Search based on regex case Insensitive
           re := regexp.MustCompile("(?i)"+database.List[i].Signatures[j])
 	         if len(re.Find([]byte(strings.Replace(scanner.Text()," ","",-1)))) > 0 {
-             color.Red("\t\tWARNING: %s\n",database.List[i].Name)
-             fmt.Printf("\t\tOn file %s\n",path)
-             fmt.Printf("\t\tLine %d\n",line)
+             if logoutput {
+               fmt.Println((time.Now()).Format(layout),"|Warning|File infected|",path,":",line)
+             } else {
+               color.Red("\t\tWARNING: %s\n",database.List[i].Name)
+               fmt.Printf("\t\tOn file %s\n",path)
+               fmt.Printf("\t\tLine %d\n",line)
+             }
+
            }
            j++
          }
@@ -194,25 +243,7 @@ func ScanFileRequest(path string) ScanRequest {
      }
 }
  if vt == true {
-   fmt.Printf("\tVirus total check\n")
-   scanfilerequest := ScanFileRequest(path)
-   if scanfilerequest.Response == -10 {
-     color.Red("\tError on request\n")
-     return
-   }
-   var scanfileresult ScanResult
-   scanfileresult.Response = -2
-
-   for scanfileresult.Response == -2 {
-     time.Sleep(25 * time.Second)
-     scanfileresult = ScanFileResult(scanfilerequest)
-   }
-   if scanfileresult.Positives > 0 {
-      color.Red("\t\tWarning: File infected\n")
-      color.Red("\t\tMore info %s\n",scanfileresult.Permalink)
-   } else {
-     color.Green("\t\tOK\n")
-   }
+   ScanFileOnVt(path)
 }
  // if err := scanner.Err(); err != nil {
  // }
@@ -226,14 +257,26 @@ func LoadDatabase(extension string) Database {
       cg,_:= ioutil.ReadFile("Signatures/signatures_"+extension+".json")
       //database := Database{}
       _= json.Unmarshal([]byte(cg),&database)
-      fmt.Printf("\tDatabase was loaded\n")
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice|Database was loaded")
+      } else {
+        fmt.Printf("\tDatabase was loaded\n")
+      }
 
     } else if os.IsNotExist(err) {
-      fmt.Println("I can't find signatures_",extension,".json")
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Alert|Can't find signatures file signatures",extension,".json")
+      } else {
+        fmt.Println("I can't find signatures_",extension,".json")
+      }
 
     } else {
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Alert|Something goes wrong")
+      } else {
         fmt.Println("Something goes wrong")
         fmt.Println(err)
+      }
     }
     return database
 }
@@ -243,27 +286,49 @@ func ScanFileForSignatures(file string, vt bool) {
   switch extension {
   case ".php":
     if len(DBSignaturesPHP.List) == 0 {
-      fmt.Printf("\tLoading DB Signatures for PHP files\n")
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice|Loading DB Signatures for PHP files")
+      } else {
+        fmt.Printf("\tLoading DB Signatures for PHP files\n")
+      }
       DBSignaturesPHP = LoadDatabase("php")
     }
-    fmt.Printf("\tScanning file %s\n",file)
+    if ! logoutput {
+      fmt.Printf("\tScanning file %s\n",file)
+    }
     CheckSignaturesOnFile(file,DBSignaturesPHP, vt)
   case ".js":
     if len(DBSignaturesJS.List) == 0 {
-      fmt.Printf("\tLoading DB Signatures for JS files\n")
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice|Loading DB Signatures for JS files")
+      } else {
+        fmt.Printf("\tLoading DB Signatures for JS files\n")
+      }
       DBSignaturesJS = LoadDatabase("js")
     }
-    fmt.Printf("\tScanning file %s\n",file)
+    if ! logoutput {
+      fmt.Printf("\tScanning file %s\n",file)
+    }
     CheckSignaturesOnFile(file,DBSignaturesJS, vt)
+  case ".zip":
+    if vt {
+      ScanFileOnVt(file)
+    }
   default:
-    fmt.Printf("\tExtension not supported for signatures check (yet) (%s)\n",file)
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Notice|Extension not suppported for signatures check|",extension)
+    } else {
+      fmt.Printf("\tExtension not supported for signatures check (yet) (%s)\n",file)
+    }
     CheckSignaturesOnFile(file,Database{},vt)
 
   }
 }
 
 func ScanDirectory(path string, vt bool) error {
-  fmt.Println("Scanning dir: ",path)
+  if ! logoutput {
+    fmt.Println("Scanning dir: ",path)
+  }
   //reg, _ := regexp.Compile("[a-zA-z0-9]+")
 //basedir := reg.ReplaceAllString(path,"")
   err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
@@ -287,7 +352,11 @@ func MonitoringDirectory(path string,vt bool) {
 	defer watcher.Close()
 
 	if err := filepath.Walk(path, watchDir); err != nil {
-		fmt.Println("ERROR", err)
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Error|Directory")
+    } else {
+		    fmt.Println("ERROR", err)
+    }
 	}
 	done := make(chan bool)
 
@@ -296,13 +365,21 @@ func MonitoringDirectory(path string,vt bool) {
 			select {
 			// watch for events
 			case event := <-watcher.Events:
+
         if event.Op&fsnotify.Chmod == fsnotify.Chmod || event.Op&fsnotify.Create == fsnotify.Create {
+          if logoutput {
+            fmt.Println((time.Now()).Format(layout),"|Event|",event.Op,"|",event.Name)
+          }
           ScanFileForSignatures(event.Name,vt)
         }
 
 				// watch for errors
 			case err := <-watcher.Errors:
-				fmt.Println("ERROR", err)
+        if logoutput {
+          fmt.Println((time.Now()).Format(layout),"|Error|Directory read")
+        } else {
+				  fmt.Println("ERROR", err)
+        }
 			}
 		}
 	}()
@@ -311,13 +388,17 @@ func MonitoringDirectory(path string,vt bool) {
 }
 
 func main() {
+  //date := time.Now()
+
+  //fmt.Println(date.Format(layout))
+  //return
   //check subcommand
   scanCmd := flag.NewFlagSet("scan",flag.ExitOnError)
   monitorCmd := flag.NewFlagSet("monitor",flag.ExitOnError)
   if len(os.Args) < 3 {
     fmt.Println("expected scan or monitor parameter.")
     fmt.Printf("\twebsite_scan scan -path/var/www/html\n")
-    fmt.Printf("\twebsite_scan monitor -path=/var/www/html -vt\n")
+    fmt.Printf("\twebsite_scan monitor -path=/var/www/html -vt -log\n")
   } else {
       switch os.Args[1] {
       case "scan":
@@ -329,8 +410,16 @@ func main() {
       case "monitor":
         path := monitorCmd.String("path","","path to the directory")
         vt := monitorCmd.Bool("vt",false,"virus total option")
+        out := monitorCmd.Bool("log",false,"Output Option")
+
         monitorCmd.Parse(os.Args[2:])
-        fmt.Println("Starting monitoring ")
+        logoutput = *out
+
+        if logoutput {
+          fmt.Println((time.Now()).Format(layout),"|Notice|Start monitoring|",*path)
+        } else {
+            fmt.Println("Starting monitoring")
+        }
         MonitoringDirectory(*path,*vt)
       default:
         fmt.Println("There are scan or monitor option")

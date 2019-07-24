@@ -29,6 +29,22 @@ Options:
 - scan: Scan files once
 - monitor: monitoring files
 - vt: use virustotal.com to check files
+- log: use to output log format
+
+## Date options for log format
+
+In WebSiteFirstProtection.go change **const layout** line 83 to adjust date format output.
+
+Examples:
+
+```golang
+const layout = "2006-01-02T15:04:05"
+const layout = "2006-01-02T15:04:05-0700"
+const layout = "2 Jan 2006 15:04:05"
+const layout = "2 Jan 2006 15:04"
+const layout = "Mon, 2 Jan 2006 15:04:05 MST"
+```
+
 
 ## Dependences
 - [FsNotify](github.com/fsnotify/fsnotify)
