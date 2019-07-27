@@ -31,6 +31,8 @@ import (
   "mime/multipart"
   "io"
   "github.com/fatih/color"
+  "crypto/md5"
+  "encoding/hex"
 
 
 )
@@ -48,9 +50,14 @@ type Malware struct {
 }
 
 type Database struct {
-  DBName  string `json:"Database_Name"`
+  DBName      string `json:"Database_Name"`
   DBFileType  string `json:"Database_File_Type"`
-  List    []Malware `json:"Database_Signatures"`
+  List        []Malware `json:"Database_Signatures"`
+}
+
+type Whitelist struct {
+  Name  string `json:"name"`
+  Hash  string `json:"md5"`
 }
 
 type ScanResult struct {
@@ -81,6 +88,7 @@ const APIKEY = ""
 var watcher *fsnotify.Watcher
 var logoutput bool
 const layout = "2006-01-02T15:04:05"
+var whitelist []Whitelist
 
 func ScanFileResult(scanrequest ScanRequest) ScanResult {
   var scanresult ScanResult
@@ -109,6 +117,48 @@ func ScanFileResult(scanrequest ScanRequest) ScanResult {
 
 }
 
+func LoadWithlist() {
+  if _,err := os.Stat("whitelist.json"); err == nil {
+      cg,_:= ioutil.ReadFile("whitelist.json")
+      //database := Database{}
+      _= json.Unmarshal([]byte(cg),&whitelist)
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice|Whitelist OK")
+      } else {
+        fmt.Printf("Whitelist loaded\n")
+      }
+
+    } else if os.IsNotExist(err) {
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice|There isn't Whitelist file")
+      } else {
+        fmt.Println("There isn't Whitelist file")
+      }
+
+    } else {
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Alert|Something goes wrong")
+      } else {
+        fmt.Println("Something goes wrong")
+        fmt.Println(err)
+      }
+    }
+}
+
+func InWhiteList(filename string, hash string) bool {
+  for _, item := range whitelist {
+    if item.Name == filename && item.Hash == hash {
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Notice| Whitelist|",filename)
+      } else {
+        fmt.Println("\tWhitelist for ",filename)
+      }
+      return true
+    }
+  }
+  return false
+}
+
 func ScanFileRequest(path string) ScanRequest {
   var scanrequest ScanRequest
   scanrequest.Response=-10
@@ -120,6 +170,20 @@ func ScanFileRequest(path string) ScanRequest {
 		return scanrequest
 	}
 	defer f.Close()
+  h := md5.New()
+  if _, err = io.Copy(h,f); err != nil {
+    if logoutput {
+      fmt.Println((time.Now()).Format(layout),"|Error|Copying file|",path)
+    } else {
+      fmt.Println(err)
+    }
+    return scanrequest
+  }
+
+  if InWhiteList(filepath.Base(path),hex.EncodeToString(h.Sum(nil))) {
+    scanrequest.Response = -9
+    return scanrequest
+  }
 	fw, err := w.CreateFormFile("file", path)
 	if err != nil {
 		return scanrequest
@@ -214,8 +278,22 @@ func ScanFileOnVt(path string) {
       } else {
         fmt.Println(err)
       }
+      return
     }
     defer f.Close()
+    h := md5.New()
+    if _, err = io.Copy(h,f); err != nil {
+      if logoutput {
+        fmt.Println((time.Now()).Format(layout),"|Error|Copying file|",path)
+      } else {
+        fmt.Println(err)
+      }
+      return
+    }
+    if InWhiteList(filepath.Base(path),hex.EncodeToString(h.Sum(nil))) {
+      return
+    }
+
     scanner := bufio.NewScanner(f)
     line := 1
     for scanner.Scan() {
@@ -395,6 +473,7 @@ func main() {
   //check subcommand
   scanCmd := flag.NewFlagSet("scan",flag.ExitOnError)
   monitorCmd := flag.NewFlagSet("monitor",flag.ExitOnError)
+
   if len(os.Args) < 3 {
     fmt.Println("expected scan or monitor parameter.")
     fmt.Printf("\twebsite_scan scan -path/var/www/html\n")
@@ -404,8 +483,17 @@ func main() {
       case "scan":
         path := scanCmd.String("path","","path to the directory")
         vt := scanCmd.Bool("vt",false,"virus total option")
+        out := scanCmd.Bool("log",false,"Output Option")
+
         scanCmd.Parse(os.Args[2:])
-        fmt.Println("Start scanning ")
+        logoutput = *out
+        if logoutput {
+          fmt.Println((time.Now()).Format(layout),"|Notice|Start scanning|",*path)
+        } else {
+            fmt.Println("Starting scanning")
+        }
+        LoadWithlist()
+        //fmt.Println("Start scanning ")
         ScanDirectory(*path,*vt)
       case "monitor":
         path := monitorCmd.String("path","","path to the directory")
@@ -420,6 +508,7 @@ func main() {
         } else {
             fmt.Println("Starting monitoring")
         }
+        LoadWithlist()
         MonitoringDirectory(*path,*vt)
       default:
         fmt.Println("There are scan or monitor option")
