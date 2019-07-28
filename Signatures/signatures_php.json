@@ -266,32 +266,6 @@
         "\\$zd45ff5a\\=\"\\\\x62\\\\x61\\\\163\\\\x65\\\\x36\\\\64\\\\137\\\\x64"
       ]
     },
-    {
-     "Malware_Name": "Generic PHP malware",
-     "Malware_Signatures": [
-       "function.*for.*strlen.*isset",
-       "\\$_POST\\[\\'cmd\\'\\]=\\\"uname -ar ; pwd ; id ; ls -la ;\\\";",
-       "foreach\\(array\\(36,112,61,64,36,95,80,79,83,84,91,39",
-       "sprintf\\(\\(substr\\(urlencode\\(print_r\\(array\\(\\),1\\)\\)",
-       "\\$s_func=\"cr\"\\.\"eat\"\\.\"e_fun\"\\.\"cti\"\\.\"on\";",
-       "\\@\\$b374k",
-       "eval\\(base64_decode\\(",
-       "\\$_F=__FILE__;\\$_X=",
-       "wget http\\:\\/\\/packetstormsecurity\\.org",
-       "c999sh_surl",
-       "I just want to be the best defacer",
-       "buasueu64_duecuoudue",
-       "wcwrwewawtew_wfwunwction",
-       "\\$GLOBALS.*\\\\x",
-       "bqaqseq64q_dqeqcqodqe",
-       "zczrzeatzez_fzuznzcztzizozn",
-       "x_superfetch\\(\\$a\\[1\\],\\$a\\[2\\],\\$a\\[3\\],\\$a\\[4\\]\\);",
-       "\\/KOFEjc",
-       "if \\(\\$_FILES\\[\\'F1l3\\'\\]\\) \\{move_uploaded_file",
-       "\\\"\\)\\\\x29\\);\\\"",
-       "\\\\x7ainf\\\\x6ca\\\\x74\\\\x65"
-     ]
-   },
    {
       "Malware_Name": "Flooder.PHP.MailSpam",
       "Malware_Signatures": [
@@ -1994,6 +1968,88 @@
       "Malware_Name": "PHP.Mailer-12",
       "Malware_Signatures": [
         "\\$testa \\= \\$_POST\\['veio'\\];\r\nif\\(\\$testa \\!\\= \"\"\\) \\{\r\n        \\$message \\= \\$_POST\\['html'\\];\r\n        \\$subject \\= \\$_POST\\['assunto'\\];"
+      ]
+    },
+    {
+      "Malware_Name": "Nano or Ninja Reverse Shell",
+      "Malware_Signatures": [
+        "<?=$_GET[p]==_&&$_GET[f]($_GET[c]);",
+        "\\$[a-z0-9-_]+\\[[^]]+\\]\\(",
+        "base64_decode[^;]+getallheaders"
+      ],
+      "Malwere_Type": "Reverse Shell",
+      "Malware_Reference": "https://github.com/s0md3v/nano/blob/master/nano.php",
+      "Rule_Reference": "phpmalwarefinder"
+    },
+    {
+      "Malware_Name": "C99Shell",
+      "Malware_Signatures": [
+        ";\\$\\w+\\(\\$\\w+(,\\s?\\$\\w+)+\\);"
+      ],
+      "Malwere_Type": "Reverse Shell",
+      "Malware_Reference": "https://bartblaze.blogspot.com/2015/03/c99shell-not-dead.html",
+      "Rule_Reference": "phpmalwarefinder"
+
+    },
+    {
+      "Malware_Name": "phpencode",
+      "Malware_Signatures": [
+        "\\$XnNhAWEnhoiqwciqpoHH=file\\(__FILE__\\)"
+
+      ],
+      "Malwere_Type": "Obfuscation",
+      "Malware_Reference": "https://www.phpencode.org",
+      "Rule_Reference": "https://www.phpencode.org"
+    },
+    {
+     "Malware_Name": "Generic PHP malware",
+     "Malware_Signatures": [
+       "function.*for.*strlen.*isset",
+       "\\$_POST\\[\\'cmd\\'\\]=\\\"uname -ar ; pwd ; id ; ls -la ;\\\";",
+       "foreach\\(array\\(36,112,61,64,36,95,80,79,83,84,91,39",
+       "sprintf\\(\\(substr\\(urlencode\\(print_r\\(array\\(\\),1\\)\\)",
+       "\\$s_func=\"cr\"\\.\"eat\"\\.\"e_fun\"\\.\"cti\"\\.\"on\";",
+       "\\@\\$b374k",
+       "eval\\(base64_decode\\(",
+       "\\$_F=__FILE__;\\$_X=",
+       "wget http\\:\\/\\/packetstormsecurity\\.org",
+       "c999sh_surl",
+       "I just want to be the best defacer",
+       "buasueu64_duecuoudue",
+       "wcwrwewawtew_wfwunwction",
+       "\\$GLOBALS.*\\\\x",
+       "bqaqseq64q_dqeqcqodqe",
+       "zczrzeatzez_fzuznzcztzizozn",
+       "x_superfetch\\(\\$a\\[1\\],\\$a\\[2\\],\\$a\\[3\\],\\$a\\[4\\]\\);",
+       "\\/KOFEjc",
+       "if \\(\\$_FILES\\[\\'F1l3\\'\\]\\) \\{move_uploaded_file",
+       "\\\"\\)\\\\x29\\);\\\"",
+       "\\\\x7ainf\\\\x6ca\\\\x74\\\\x65"
+     ]
+   },
+    {
+      "Malware_Name": "Generic PHP malware Extended",
+      "Malware_Signatures": [
+        "chr\\([0-9]*\\)",
+        "preg_replace",
+        "system",
+        "assert",
+        "passthru",
+        "execbase64_decode",
+        "fsockopen",
+        "udp\\:",
+        "posix_",
+        "socket_create"
+
+      ]
+    },
+    {
+      "Malware_Name": "Suspicious Pattern",
+      "Malware_Signatures": [
+        "\\\\[xX][0-9a-fA-f]+$",
+        "([A-Za-z0-9+\\/]{4})*(?:[A-Za-z0-9+\\/]{2})==",
+        "[A-Za-z0-9+\\/]{3}=",
+        "[A-Za-z0-9+\\/]{4}"
       ]
     }
   ]
