@@ -1,0 +1,46 @@
+{
+ "Path": "./samples/images/",
+ "Total": 2,
+ "Positives": 2,
+ "Date": "2019-08-05T09:56:17",
+ "Files": [
+   {
+     "Type": "PHP Files",
+     "Total": 55,
+     "Infected": 10
+   },
+   {
+     "Type": "IMG Files",
+     "Total": 30,
+     "Infected": 2
+   },
+   {
+     "Type": "JS Files",
+     "Total": 13,
+     "Infected": 4
+   }
+
+ ],
+ "Infected_Files": [
+  {
+   "Filename": "samples/images/exif/sample1.jpg",
+   "Malware_Name": "Base64 Data",
+   "Description": [
+    {
+     "Signature": "(?i)nikon",
+     "Text": "\"NIKON CORPORATION\""
+    }
+   ]
+  },
+  {
+   "Filename": "samples/images/exif/sample2.jpg",
+   "Malware_Name": "Base64 Data",
+   "Description": [
+    {
+     "Signature": "(?i)nikon",
+     "Text": "\"NIKON CORPORATION\""
+    }
+   ]
+  }
+ ]
+}
