@@ -8,11 +8,11 @@ import (
   "path/filepath"
   "flag"
   "bufio"
-  "strings"
+  //"strings"
   "regexp"
   "github.com/fsnotify/fsnotify"
   "time"
-  "net/url"
+  //"net/url"
   "net/http"
   "bytes"
   "mime/multipart"
@@ -85,10 +85,10 @@ type ScanRequest struct {
   Resource    string  `json:"resource"`
   Response    int64   `json:"response_code"`
   ScanId      string  `json:"scan_id"`
-  Message     string  `json:"verbose_msg"`
+  //Message     string  `json:"verbose_msg"`
   Sha256      string  `json:"sha256"`
-  ScanDate    string  `json:"scan_date"`
-  UrlAddress  string  `json:"url"`
+  //ScanDate    string  `json:"scan_date"`
+  //UrlAddress  string  `json:"url"`
 }
 
 var DBSignaturesPHP Database
@@ -98,6 +98,7 @@ const APIKEY = ""
 const TelegramKEY = ""
 var watcher *fsnotify.Watcher
 var logOption bool
+var debugOption bool
 var telegramOption bool
 const layout = "2006-01-02T15:04:05"
 var whitelist []Whitelist
@@ -132,7 +133,6 @@ func LoadTelegramUsers() {
 }
 
 func SendTelegramAlert(event string, file string, malware string) {
-  //fmt.Println("\t**Send Alert**")
   bot, err := tgbotapi.NewBotAPI(TelegramKEY)
 	if err != nil {
 		return
@@ -148,7 +148,6 @@ func SendTelegramAlert(event string, file string, malware string) {
 
 //SendTelegramMessage receive a type of message and the text of the message to send to all users
 func SendSummaryReport() {
-  //fmt.Println("Send Report")
   bot, err := tgbotapi.NewBotAPI(TelegramKEY)
 	if err != nil {
 		return
@@ -169,19 +168,21 @@ VIRUS TOTAL FUNCTIONS Functions
 */
 
 // Scan manage VirtusTotal send and request files. Return the number of positives or -1 for error
-func (vt VTScan) Scan(path string) int64 {
+func (vt *VTScan) Scan(path string) int64 {
 
   vt.File = path
   if vt.request() {
     for vt.result() {
-      if vt.Result.Response != -2 {
+      if vt.Result.Response == 1 {
+        break
+      } else if vt.Result.Response == 0 {
         break
       }
       time.Sleep(25 * time.Second)
 
       //scanfileresult = vt.result()
     }
-    if vt.Request.Response == 2 {
+    if vt.Request.Response == 1 {
       return vt.Result.Positives
     }
   }
@@ -189,33 +190,44 @@ func (vt VTScan) Scan(path string) int64 {
 }
 
 //result result from Virtus Total
-func (vt VTScan) result() bool {
+func (vt *VTScan) result() bool {
   //var scanresult ScanResult
   vt.Result.Response = - 10
   //scanresult.Response = -10
   hc := http.Client{}
-  form := url.Values{}
-  form.Add("apikey", APIKEY)
-  form.Add("resource", vt.Request.Resource)
+  //form := url.Values{}
+  //form.Add("apikey", APIKEY)
+  //form.Add("resource", vt.Request.Resource)
+  if debugOption {
+	  color.Magenta("Resource\n%s",vt.Request.Resource)
+  }
 
-  req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/report", strings.NewReader(form.Encode()))
+  //req, err := http.NewRequest("POST", "https://www.virustotal.com/vtapi/v2/file/report", strings.NewReader(form.Encode()))
+  req, err := http.NewRequest("GET", "https://www.virustotal.com/vtapi/v2/file/report",nil)
   req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+  q := req.URL.Query()
+  q.Add("apikey",APIKEY)
+  q.Add("resource",vt.Request.Resource)
+  req.URL.RawQuery = q.Encode()
+  if debugOption {
+  	color.Magenta("%s",req.URL.String())
+  }
   res, err := hc.Do(req)
 	if err != nil {
 		return false
 	}
 	// Check the response
   if res.StatusCode != http.StatusOK {
-		err = fmt.Errorf("bad status: %s", res.Status)
+    err = fmt.Errorf("bad status: %s", res.Status)
     return false
-	} else {
+  } else {
     decoder := json.NewDecoder(res.Body)
     err = decoder.Decode(&vt.Result)
   }
   return true
 }
 
-func (vt VTScan) request() bool {
+func (vt *VTScan) request() bool {
   //var scanrVTResult.vequest ScanRequest
   vt.Request.Response=-10
 	var b bytes.Buffer
@@ -230,9 +242,9 @@ func (vt VTScan) request() bool {
 
   if _, err = io.Copy(h,f); err != nil {
     if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Error | Copy File |",vt.File)
+      color.Red("%s | Error | Copy File | %s",(time.Now()).Format(layout),vt.File)
     } else {
-      fmt.Println(err)
+      color.Red("%s",err)
     }
     return false
   }
@@ -262,23 +274,37 @@ func (vt VTScan) request() bool {
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	client := &http.Client{}
+
 	res, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	// Check the response
 	if res.StatusCode != http.StatusOK {
-    if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Bad Status Code |",res.Status)
-    } else {
-        err = fmt.Errorf("bad status: %s", res.Status)
-    }
+        if debugOption {
+            color.Magenta("%s",res.Body)
+        }
+    		if logOption {
+      			color.Red("%s | Bad Status Code | %s",(time.Now()).Format(layout),res.Status)
+    		} else {
+        		err = fmt.Errorf("bad status: %s", res.Status)
+    		}
+		if debugOption {
+			color.Magenta("%s",res.Body)
+		}
 	} else {
-    decoder := json.NewDecoder(res.Body)
-    err = decoder.Decode(&vt.Request)
-    return true
-  }
-  return false
+        color.Green("%s | VT Status Code | %s",(time.Now()).Format(layout),res.Status)
+    		decoder := json.NewDecoder(res.Body)
+        //requestaux := ScanRequest{}
+    		err = decoder.Decode(&vt.Request)
+        //vt.Request.Resource = requestaux.Resource
+        if debugOption {
+          color.Magenta("Resource returned")
+          color.Magenta("%s",vt.Request.Resource)
+        }
+    		return true
+  	}
+  	return false
 }
 
 func ScanFileOnVt(path string) (bool, string) {
@@ -290,27 +316,27 @@ func ScanFileOnVt(path string) (bool, string) {
   }
   if vt.Scan(path) < 0 {
     if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Error | Request Virustotal")
+      color.Red("%s | Error | Request Virustotal",(time.Now()).Format(layout))
     } else {
       color.Red("\tError on request\n")
     }
     return false,""
   }
   if vt.Result.Positives > 0 {
-    if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Warning | File infected | VirusTotal |",path,"|",vt.Result.Permalink)
-    } else {
-      color.Red("\t\tWarning: File infected\n")
-      color.Red("\t\tMore info %s\n",vt.Result.Permalink)
-    }
+    // if logOption {
+    //   color.Red("%s | Warning | File infected | VirusTotal | %s | %s",(time.Now()).Format(layout),path,vt.Result.Permalink)
+    // } else {
+    //   color.Red("\t\tWarning: File infected\n")
+    //   color.Red("\t\tMore info %s\n",vt.Result.Permalink)
+    // }
     return true, "Virtus Total Detection"
-  } else {
-    if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Ok | VirusTotal |",vt.Result.Permalink)
-    } else {
-      color.Green("\t\tOK\n")
-    }
-  }
+  // } else {
+  //   if logOption {
+  //     color.Green("%s | Ok | VirusTotal | %s",(time.Now()).Format(layout),vt.Result.Permalink)
+  //   } else {
+  //     color.Green("\t\tOK\n")
+  //   }
+   }
   return false, ""
 }
 
@@ -325,16 +351,16 @@ func LoadWhitelist() {
       _= json.Unmarshal([]byte(cg),&whitelist)
     } else if os.IsNotExist(err) {
       if logOption {
-        fmt.Println((time.Now()).Format(layout),"| Notice | There isn't Whitelist file")
+        color.Red("%s | Notice | There isn't Whitelist file",(time.Now()).Format(layout))
       } else {
-        fmt.Println("There isn't Whitelist file")
+        color.Red("There isn't Whitelist file")
       }
     } else {
       if logOption {
-        fmt.Println((time.Now()).Format(layout),"| Alert | Something goes wrong")
+        color.Red((time.Now()).Format(layout),"| Alert | Something goes wrong")
       } else {
-        fmt.Println("Something goes wrong")
-        fmt.Println(err)
+        color.Red("Something goes wrong")
+        color.Red("%s",err)
       }
     }
 }
@@ -347,9 +373,9 @@ func InWhiteList(path string) bool {
   h := md5.New()
   if _, err := io.WriteString(h,string(f)); err != nil {
    if logOption {
-     fmt.Println((time.Now()).Format(layout),"| Error | Copying file |",path)
+     color.Red("%s | Error | Copying file | %s",(time.Now()).Format(layout),path)
    } else {
-     fmt.Println(err)
+     color.Red("%s",err)
    }
    return false
   }
@@ -359,9 +385,9 @@ func InWhiteList(path string) bool {
   for _, item := range whitelist {
     if item.Name == filename && item.Hash == md5sum {
       if logOption {
-        fmt.Println((time.Now()).Format(layout),"| Notice |  Whitelist |",filename)
+        color.Green("%s | Notice |  Whitelist | %s",(time.Now()).Format(layout),filename)
       } else {
-        fmt.Println("\tWhitelist for ",filename)
+        color.Green("\tWhitelist for %s",filename)
       }
       return true
     }
@@ -382,9 +408,9 @@ func CheckFileText(path string, database Database, vt bool) (bool, string) {
   f, err := ioutil.ReadFile(path)
   if err != nil {
     if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Error | Open File |",path)
+      color.Red("%s | Error | Open File | %s",(time.Now()).Format(layout),path)
     } else {
-      fmt.Println(err)
+      color.Red("%s",err)
     }
     return false, ""
   }
@@ -444,9 +470,9 @@ func LoadDatabase(extension string) Database {
 
   }
   if logOption {
-    fmt.Println((time.Now()).Format(layout),"| Notice | Loading DB Signatures for",extension,"files")
+    color.Green("%s | Notice | Loading DB Signatures for %s files",(time.Now()).Format(layout),extension)
   } else {
-    fmt.Printf("\tLoading DB Signatures for %s files\n",extension)
+    color.Green("\tLoading DB Signatures for %s files\n",extension)
   }
   if _,err := os.Stat("Signatures/signatures_"+extension+".json"); err == nil {
       cg,_:= ioutil.ReadFile("Signatures/signatures_"+extension+".json")
@@ -454,16 +480,16 @@ func LoadDatabase(extension string) Database {
       _= json.Unmarshal([]byte(cg),&database)
     } else if os.IsNotExist(err) {
       if logOption {
-        fmt.Println((time.Now()).Format(layout),"| Alert | Can't find signatures file signatures",extension,".json")
+        color.Red("%s | Alert | Can't find signatures file signatures_%s.json",(time.Now()).Format(layout),extension)
       } else {
-        fmt.Println("I can't find signatures_",extension,".json")
+        color.Red("I can't find signatures_%s.json",extension)
       }
     } else {
       if logOption {
-        fmt.Println((time.Now()).Format(layout),"| Alert | Something goes wrong")
+        color.Red("%s | Alert | Something goes wrong",(time.Now()).Format(layout))
       } else {
-        fmt.Println("Something goes wrong")
-        fmt.Println(err)
+        color.Red("Something goes wrong")
+        color.Red("%s",err)
       }
     }
     return database
@@ -502,11 +528,11 @@ func CheckFileImage(path string, database Database, vt bool) (bool, string) {
   raw, err := ioutil.ReadFile(path)
   filedata := Filedata{}
 	if err != nil {
-		fmt.Println(err)
+		color.Red("%s",err)
 	}
 	x, err := exif.Decode(bytes.NewReader(raw))
 	if err != nil {
-		fmt.Println(err)
+		color.Red("%s",err)
 	}
   positive := false
   malwareName := ""
@@ -555,7 +581,7 @@ func CheckFileImage(path string, database Database, vt bool) (bool, string) {
 func ScanDirectory(path string, vt bool) error {
 
   if ! logOption {
-    fmt.Println("Scanning dir: ",path)
+    color.Green("Scanning dir: %s",path)
   }
   err := filepath.Walk(path, func(file string, info os.FileInfo, err error) error {
     if !info.IsDir() {
@@ -563,7 +589,7 @@ func ScanDirectory(path string, vt bool) error {
       infected, malware := ScanFile(file, vt)
       if infected {
         if logOption {
-          fmt.Println((time.Now()).Format(layout),"| Warning | File infected |",malware,"|",file)
+          color.Red("%s | Warning | File infected | %s | %s",(time.Now()).Format(layout),malware,file)
         } else {
           color.Red("\tWARNING: %s\n",malware)
           color.Blue("\t\tFILE: %s\n",file)
@@ -588,9 +614,9 @@ func MonitoringDirectory(path string,vt bool) {
 
 	if err := filepath.Walk(path, watchDir); err != nil {
     if logOption {
-      fmt.Println((time.Now()).Format(layout),"| Error | Directory")
+      color.Red("%s | Error | Directory",(time.Now()).Format(layout))
     } else {
-		    fmt.Println("ERROR", err)
+		    color.Red("ERROR", err)
     }
 	}
 	done := make(chan bool)
@@ -603,12 +629,12 @@ func MonitoringDirectory(path string,vt bool) {
 
         if event.Op&fsnotify.Chmod == fsnotify.Chmod || event.Op&fsnotify.Create == fsnotify.Create {
           if logOption {
-            fmt.Println((time.Now()).Format(layout),"| Event |",event.Op,"|",event.Name)
+            color.Green("%s | Event | %s | %s",(time.Now()).Format(layout),event.Op,event.Name,)
           }
           infected, malware := ScanFile(event.Name,vt)
           if infected {
             if logOption {
-              fmt.Println((time.Now()).Format(layout),"| Warning | File infected |",malware,"|",path)
+              color.Red("%s | Warning | File infected | %s | %s",(time.Now()).Format(layout),malware,event.Name)
             } else {
               color.Green("\tEvent: %s\n",event.Op)
               color.Red("\tWARNING: %s\n",malware)
@@ -623,9 +649,9 @@ func MonitoringDirectory(path string,vt bool) {
 				// watch for errors
 			case err := <-watcher.Errors:
         if logOption {
-          fmt.Println((time.Now()).Format(layout)," |Error | Read Directory")
+          color.Red("%s | Error | Read Directory",(time.Now()).Format(layout))
         } else {
-				  fmt.Println("ERROR", err)
+				  color.Red("ERROR", err)
         }
 			}
 		}
@@ -635,7 +661,7 @@ func MonitoringDirectory(path string,vt bool) {
 }
 
 func SaveReport(report FinalReport) {
-  fmt.Println("Save Report")
+  color.Green("Save Report")
 
   file,_ := json.MarshalIndent(report,""," ")
   _ = ioutil.WriteFile("LastReport.json",file,0644)
@@ -643,13 +669,16 @@ func SaveReport(report FinalReport) {
 }
 
 func main() {
+  color.Magenta("Debug Messages")
+  color.Red("Warnings and Errors Messages")
+  color.Green("Safe Messages")
   scanCmd := flag.NewFlagSet("scan",flag.ExitOnError)
   monitorCmd := flag.NewFlagSet("monitor",flag.ExitOnError)
 
   if len(os.Args) < 3 {
-    fmt.Println("expected scan or monitor parameter.")
-    fmt.Printf("\twebsite_scan scan -path/var/www/html\n")
-    fmt.Printf("\twebsite_scan monitor -path=/var/www/html -vt -log\n")
+    color.Red("expected scan or monitor parameter.")
+    color.Red("\twebsite_scan scan -path/var/www/html\n")
+    color.Red("\twebsite_scan monitor -path=/var/www/html -vt -log\n")
   } else {
       LoadWhitelist()
       LoadTelegramUsers()
@@ -660,23 +689,25 @@ func main() {
         vt := scanCmd.Bool("vt",false,"virus total option")
         out := scanCmd.Bool("log",false,"Output Option")
         tel := scanCmd.Bool("telegram",false,"Output Option")
+        debug := scanCmd.Bool("debug",false,"Output Option")
 
         scanCmd.Parse(os.Args[2:])
         logOption = *out
+	debugOption = *debug
         telegramOption = *tel
         finalReport.Path = *path
         if logOption {
-          fmt.Println((time.Now()).Format(layout),"| Notice | Start Scan |",*path)
+          color.Green("%s | Notice | Start Scan |",(time.Now()).Format(layout),*path)
         } else {
-            fmt.Println("Starting scanning")
+            color.Green("Starting scanning")
         }
         ScanDirectory(*path,*vt)
         if logOption {
-          fmt.Println((time.Now()).Format(layout),"| Notice | End Scan |", finalReport.TotalFiles,"|", finalReport.Positives)
+          color.Green("%s | Notice | End Scan | %s | %s",(time.Now()).Format(layout),finalReport.TotalFiles, finalReport.Positives)
         } else {
-          fmt.Println("End Scan")
-          fmt.Println("Total Files Scanned: ",finalReport.TotalFiles)
-          fmt.Println("Total Positives:     ",finalReport.Positives)
+          color.Green("End Scan")
+          color.Green("Total Files Scanned: ",finalReport.TotalFiles)
+          color.Green("Total Positives:     ",finalReport.Positives)
           if telegramOption {
             SendSummaryReport()
           }
@@ -687,18 +718,20 @@ func main() {
         vt := monitorCmd.Bool("vt",false,"virus total option")
         out := monitorCmd.Bool("log",false,"Output Option")
         tel := monitorCmd.Bool("telegram",false,"Output Option")
+        debug := monitorCmd.Bool("debug",false,"Output Option")
 
         monitorCmd.Parse(os.Args[2:])
         logOption = *out
         telegramOption = *tel
+	debugOption = *debug
         if logOption {
-          fmt.Println((time.Now()).Format(layout),"| Notice | Start Monitor |",*path)
+          color.Green("%s | Notice | Start Monitor | %s",(time.Now()).Format(layout),*path)
         } else {
-            fmt.Println("Start Monitor")
+            color.Green("Start Monitor")
         }
         MonitoringDirectory(*path,*vt)
       default:
-        fmt.Println("There are scan or monitor option")
+        color.Red("There are scan or monitor option")
 
       }
   }

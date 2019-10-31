@@ -2,6 +2,12 @@
 
 WebSite First Protection is a golang application for scanning website files for detect malwares.
 
+## First Time
+first run the code you need install golang and dependences
+
+- To install golang go to [golang website](https://golang.org)
+- To install depencences use go get
+
 ## This Project/code is based on:
 - [PHP Malware Finder](https://github.com/nbs-system/php-malware-finder)
 - [Web Malware Scanner](https://github.com/redteamcaliber/WebMalwareScanner)
